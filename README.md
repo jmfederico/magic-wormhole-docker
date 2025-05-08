@@ -12,17 +12,32 @@ Magic Wormhole allows you to get arbitrary-sized files and directories (or short
 
 There are two ways to build the Docker image:
 
-### 1. Using Docker command (manual)
+### 1. Using Docker command (manual, single-platform)
+
+This method builds an image for your current machine's architecture only.
 
 Navigate to the directory containing the `Dockerfile` (the root of this repository) and run:
 
 ```sh
 docker build -t jmfederico/wormhole .
 ```
+For multi-platform builds, refer to the "Using the build script" section below.
 
-### 2. Using the build script
+### 2. Using the build script (for Multi-Platform Images)
 
-This repository includes a helper script `build_docker.sh` to build the image.
+This repository includes a helper script `build_docker.sh` to build multi-platform images (currently `linux/amd64` and `linux/arm64`) using `docker buildx`.
+
+**Prerequisites for `buildx`:**
+- Ensure `docker buildx` is available.
+- You need a `buildx` builder instance that supports multi-platform builds. If you haven't configured one, you might need to create and use one:
+  ```sh
+  # Example: Create and switch to a new builder
+  docker buildx create --name mymultibuilder --use
+  docker buildx inspect mymultibuilder --bootstrap
+  ```
+  The `build_docker.sh` script will use the builder `buildx` is currently configured to use.
+
+**Building and Loading Locally:**
 
 First, make the script executable:
 ```sh
@@ -33,7 +48,29 @@ Then, run the script from the `magic-wormhole` directory (the root of this repos
 ```sh
 ./build_docker.sh
 ```
-This script will build the image with the tag `jmfederico/wormhole`.
+This script will build the image for the specified platforms (e.g., `linux/amd64`, `linux/arm64`) with the tag `jmfederico/wormhole` and **load** the resulting images into your local Docker daemon. This is useful for local testing of the image for your host's architecture. The script will also inform you about the command to push to a registry.
+
+**Pushing the Multi-Platform Image to a Registry:**
+
+The `build_docker.sh` script (which uses `docker buildx build --load ...`) is primarily for local builds. To create and push a multi-platform manifest list and its associated images to a container registry like Docker Hub, you need to run `docker buildx build` with the `--push` flag.
+
+1.  **Log in to your Docker registry:**
+    ```sh
+    docker login
+    ```
+    (Or `docker login your.registry.com` if using a private registry).
+
+2.  **Build and push:**
+    After potentially building locally with `./build_docker.sh`, you can push using a command like the one shown by the script upon its successful completion, or directly:
+    ```sh
+    docker buildx build --platform linux/amd64,linux/arm64 --push -t jmfederico/wormhole -f Dockerfile .
+    ```
+    - `--platform linux/amd64,linux/arm64`: Specifies the target architectures. Ensure this matches the platforms your `build_docker.sh` script is configured for if you are relying on its output.
+    - `--push`: Pushes the built images and manifest list to the registry.
+    - `-t jmfederico/wormhole`: The tag for your image.
+    - `-f Dockerfile .`: Specifies the Dockerfile and the build context (repository root).
+
+This command will build the images for each specified platform and then push them along with a manifest list. The manifest list allows Docker clients to automatically pull the correct image for their architecture.
 
 ## Using the Image
 
